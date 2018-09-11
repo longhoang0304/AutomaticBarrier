@@ -1,0 +1,24 @@
+{
+  "files.associations": {
+    "initializer_list": "cpp",
+    "xstring": "cpp",
+    "xutility": "cpp",
+    "cstddef": "cpp",
+    "utility": "cpp",
+    "ios": "cpp",
+    "cmath": "cpp",
+    "cstdlib": "cpp",
+    "functional": "cpp",
+    "type_traits": "cpp",
+    "system_error": "cpp",
+    "xtr1common": "cpp",
+    "ostream": "cpp",
+    "array": "cpp",
+    "deque": "cpp",
+    "unordered_map": "cpp",
+    "vector": "cpp",
+    "*.tcc": "cpp",
+    "bitset": "cpp",
+    "xhash": "cpp"
+  }
+}

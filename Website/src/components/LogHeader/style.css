@@ -1,0 +1,10 @@
+#log-header {
+  background: #42bff4;
+  box-sizing: border-box;
+  font-weight: bold;
+}
+
+#log-header div {
+  background: transparent;
+  color: #fff;
+}
