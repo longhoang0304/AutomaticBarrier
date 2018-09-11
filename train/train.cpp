@@ -83,7 +83,7 @@ void getData()
 
 void handleReceivedData() {
   newData = false;
-  digitalWrite(LED_PIN, 1);
+  if (dataReceived) digitalWrite(LED_PIN, 1);
 }
 
 void loop_train() {

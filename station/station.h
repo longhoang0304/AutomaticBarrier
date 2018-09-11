@@ -24,6 +24,9 @@
 // Barrier, Servo (PWM)
 #define BAR_PIN 9
 
+// I2C Address
+#define SLAVE_ADDRESS 0x34
+
 void setup_station();
 void loop_station();
 
