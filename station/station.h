@@ -22,7 +22,10 @@
 #define EMER_BTN 5
 
 // Barrier, Servo (PWM)
-#define BAR_PIN 9
+#define BAR_PIN 6
+
+// speaker
+#define SPEAKER 9
 
 // I2C Address
 #define SLAVE_ADDRESS 0x34

@@ -20,14 +20,17 @@ static double speed = 0;
 
 // ===============================================================
 
-void sendESP8266Data() {
+void sendESP8266Data()
+{
   Wire.write(data, len);
 }
 
-void handleESP8266Action(int numBytes) {
+void handleESP8266Action(int numBytes)
+{
   byte data[numBytes] = {0};
   byte i = 0;
-  while(Wire.available()) {
+  while (Wire.available())
+  {
     data[i] = Wire.read();
     i++;
   }
@@ -38,7 +41,8 @@ void controlServo(int angle)
   servo.write(angle);
 }
 
-void setupI2C() {
+void setupI2C()
+{
   Wire.begin(SLAVE_ADDRESS);
   Wire.onRequest(sendESP8266Data);
   Wire.onReceive(handleESP8266Action);
@@ -96,7 +100,8 @@ void getData()
   }
 }
 
-void handleReceivedData() {
+void handleReceivedData()
+{
   newData = false;
   isTrainComming = true;
   speed = dataReceived[0];
@@ -106,42 +111,79 @@ void handleReceivedData() {
   dataReceived[0] = dataReceived[1] = 0.0;
 }
 
-void printData() {
-
+void playAlert()
+{
+  for (i = 0; i < 255; i = i + 2)
+  {
+    analogWrite(SPEAKER, i);
+    delay(10);
+  }
+  for (i = 255; i > 1; i = i - 2)
+  {
+    analogWrite(SPEAKER, i);
+    delay(5);
+  }
+  for (i = 1; i <= 10; i++)
+  {
+    analogWrite(SPEAKER, 200);
+    delay(100);
+    analogWrite(SPEAKER, 25);
+    delay(100);
+  }
 }
 
-void clearScreen() {
-
+void stopAlert()
+{
+  analogWrite(SPEAKER, 0);
 }
 
-void controlSystem() {
+void printData()
+{
+}
+
+void clearScreen()
+{
+}
+
+void controlSystem()
+{
   static int t = 0;
   t += abs(millis() - startTime);
-  if (t >= 1000 * 60) {
+  if (t >= 1000 * 60)
+  {
     countdownTimer -= 1;
     t = 0;
   }
   printData();
-  if (countdownTimer < 1) {
+  if (countdownTimer < 1)
+  {
     controlServo(180);
     countdownTimer = 0;
     startTime = 0;
     isTrainComming = false;
     clearScreen();
+    stopAlert();
+  }
+  else
+  {
+    playAlert();
   }
 }
 
 void loop_station()
 {
-  if(digitalRead(EMER_BTN)) {
+  if (digitalRead(EMER_BTN))
+  {
     alertTrain();
   }
   getData();
-  if (newData) {
+  if (newData)
+  {
     handleReceivedData();
   }
-  if (isTrainComming) {
+  if (isTrainComming)
+  {
     controlSystem();
   }
-  delay(1000);
+  delay(250);
 }
