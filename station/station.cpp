@@ -3,10 +3,14 @@
 #include <nRF24L01.h>
 #include <SPI.h>
 #include <Wire.h>
+#include <LiquidCrystal_I2C.h>
 #include "station.h"
 
 Servo servo;
 RF24 stationRf(CE, CS);
+LiquidCrystal_I2C lcd(0x3F, 16, 2);
+
+void printData(int sig, int second);
 
 static const byte stationAddress[5] = {'s', 't', 'a', 't', 'n'};
 static const byte trainAddress[5] = {'t', 'r', 'a', 'i', 'n'};
@@ -14,11 +18,17 @@ static const byte dataToSend = 1;
 static double dataReceived[2] = {0, 0};
 static bool newData = false;
 static bool isTrainComming = false;
-static int countdownTimer = 0;
+static int countdownTimer = -120;
 static int startTime = 0;
 static double speed = 0;
 
 // ===============================================================
+
+void setupLCD() {
+  lcd.init();
+  lcd.backlight();
+  printData(0);
+}
 
 void sendESP8266Data()
 {
@@ -69,6 +79,7 @@ void setup_station()
   setupI2C();
   setupServo();
   setupRf();
+  setupLCD();
 }
 
 // ===============================================================
@@ -137,12 +148,34 @@ void stopAlert()
   analogWrite(SPEAKER, 0);
 }
 
-void printData()
+void printData(int sig, int second = 0)
 {
+  lcd.clear();
+  if (!sig) {
+    lcd.setCursor(0, 0);
+    lcd.print("   THUONG  LO   ");
+    lcd.setCursor(0, 1);
+    lcd.print("    BINH  AN    ");
+  }
+  if(sig == 1) {
+    char ld[16]={0};
+    sprintf(ld,"THOI GIAN: %d", second);
+    lcd.setCursor(0, 0);
+    lcd.print("   XE SAP TOI   ");
+    lcd.setCursor(0, 1);
+    lcd.print(ld);
+  }
+  if (sig == 2) {
+    lcd.setCursor(0, 0);
+    lcd.print("    CANH BAO    ");
+    lcd.setCursor(0, 1);
+    lcd.print("   NGUY  HIEM   ");
+  }
 }
 
 void clearScreen()
 {
+  lcd.clear();
 }
 
 void controlSystem()
@@ -154,14 +187,15 @@ void controlSystem()
     countdownTimer -= 1;
     t = 0;
   }
-  printData();
-  if (countdownTimer < 1)
+  if (countdownTimer > 0) printData(1, countdownTimer);
+  if (!countdownTimer) printData(2);
+  if (countdownTimer < -120)
   {
     controlServo(180);
-    countdownTimer = 0;
+    countdownTimer = -120;
     startTime = 0;
     isTrainComming = false;
-    clearScreen();
+    printData(0);
     stopAlert();
   }
   else

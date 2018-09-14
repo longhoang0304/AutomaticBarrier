@@ -3,6 +3,8 @@
     "initializer_list": "cpp",
     "xstring": "cpp",
     "xutility": "cpp",
-    "cstddef": "cpp"
+    "cstddef": "cpp",
+    "utility": "cpp",
+    "ios": "cpp"
   }
 }
