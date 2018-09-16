@@ -124,24 +124,10 @@ static void handleReceivedData()
 
 void playAlert()
 {
-  int i = 0;
-  for (i = 0; i < 255; i = i + 2)
-  {
-    analogWrite(SPEAKER, i);
-    delay(10);
-  }
-  for (i = 255; i > 1; i = i - 2)
-  {
-    analogWrite(SPEAKER, i);
-    delay(5);
-  }
-  for (i = 1; i <= 10; i++)
-  {
-    analogWrite(SPEAKER, 200);
-    delay(100);
-    analogWrite(SPEAKER, 25);
-    delay(100);
-  }
+  analogWrite(SPEAKER, 200);
+  delay(100);
+  analogWrite(SPEAKER, 25);
+  delay(100);
 }
 
 void stopAlert()
@@ -186,6 +172,7 @@ void controlSystem()
   if (t >= 1000 * 60)
   {
     countdownTimer -= 1;
+    startTime = millis();
     t = 0;
   }
   if (countdownTimer > 0) printData(1, countdownTimer);
