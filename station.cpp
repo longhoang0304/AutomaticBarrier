@@ -4,13 +4,13 @@
 #include <SPI.h>
 #include <Wire.h>
 #include <LiquidCrystal_I2C.h>
-#include "station.h"
+#include <station.h>
 
 Servo servo;
 RF24 stationRf(CE, CS);
 LiquidCrystal_I2C lcd(0x3F, 16, 2);
 
-void printData(int sig, int second);
+void printData(int sig, int second = 0);
 
 static const byte stationAddress[5] = {'s', 't', 'a', 't', 'n'};
 static const byte trainAddress[5] = {'t', 'r', 'a', 'i', 'n'};
@@ -32,7 +32,7 @@ void setupLCD() {
 
 void sendESP8266Data()
 {
-  Wire.write(data, len);
+  Wire.write(dataToSend);
 }
 
 void handleESP8266Action(int numBytes)
@@ -64,7 +64,7 @@ void setupServo()
   controlServo(0);
 }
 
-void setupRf()
+static void setupRf()
 {
   stationRf.begin();
   stationRf.setDataRate(RF24_250KBPS);
@@ -102,7 +102,7 @@ void alertTrain()
   Serial.println();
 }
 
-void getData()
+static void getData()
 {
   if (stationRf.available())
   {
@@ -111,7 +111,7 @@ void getData()
   }
 }
 
-void handleReceivedData()
+static void handleReceivedData()
 {
   newData = false;
   isTrainComming = true;
@@ -124,6 +124,7 @@ void handleReceivedData()
 
 void playAlert()
 {
+  int i = 0;
   for (i = 0; i < 255; i = i + 2)
   {
     analogWrite(SPEAKER, i);
