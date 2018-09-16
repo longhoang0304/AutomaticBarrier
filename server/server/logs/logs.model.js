@@ -12,6 +12,10 @@ const LogsScheme = new Schema(
       type: String,
       required: true,
     },
+    station: {
+      type: String,
+      required: true,
+    },
     speed: {
       type: Number,
       required: true,
