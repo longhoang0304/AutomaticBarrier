@@ -4,13 +4,13 @@
 #include <SPI.h>
 #include <Wire.h>
 #include <LiquidCrystal_I2C.h>
-#include "station.h"
+#include <station.h>
 
 Servo servo;
 RF24 stationRf(CE, CS);
 LiquidCrystal_I2C lcd(0x3F, 16, 2);
 
-void printData(int sig, int second);
+void printData(int sig, int second = 0);
 
 static const byte stationAddress[5] = {'s', 't', 'a', 't', 'n'};
 static const byte trainAddress[5] = {'t', 'r', 'a', 'i', 'n'};
@@ -32,7 +32,7 @@ void setupLCD() {
 
 void sendESP8266Data()
 {
-  Wire.write(data, len);
+  Wire.write(dataToSend);
 }
 
 void handleESP8266Action(int numBytes)
@@ -64,7 +64,7 @@ void setupServo()
   controlServo(0);
 }
 
-void setupRf()
+static void setupRf()
 {
   stationRf.begin();
   stationRf.setDataRate(RF24_250KBPS);
@@ -102,7 +102,7 @@ void alertTrain()
   Serial.println();
 }
 
-void getData()
+static void getData()
 {
   if (stationRf.available())
   {
@@ -111,7 +111,7 @@ void getData()
   }
 }
 
-void handleReceivedData()
+static void handleReceivedData()
 {
   newData = false;
   isTrainComming = true;
@@ -124,23 +124,10 @@ void handleReceivedData()
 
 void playAlert()
 {
-  for (i = 0; i < 255; i = i + 2)
-  {
-    analogWrite(SPEAKER, i);
-    delay(10);
-  }
-  for (i = 255; i > 1; i = i - 2)
-  {
-    analogWrite(SPEAKER, i);
-    delay(5);
-  }
-  for (i = 1; i <= 10; i++)
-  {
-    analogWrite(SPEAKER, 200);
-    delay(100);
-    analogWrite(SPEAKER, 25);
-    delay(100);
-  }
+  analogWrite(SPEAKER, 200);
+  delay(100);
+  analogWrite(SPEAKER, 25);
+  delay(100);
 }
 
 void stopAlert()
@@ -185,6 +172,7 @@ void controlSystem()
   if (t >= 1000 * 60)
   {
     countdownTimer -= 1;
+    startTime = millis();
     t = 0;
   }
   if (countdownTimer > 0) printData(1, countdownTimer);

@@ -1,10 +1,9 @@
 #include <RF24.h>
 #include <nRF24L01.h>
 #include <SPI.h>
-#include "train.h"
+#include <train.h>
 
-RF24 stationRf(CE, CS);
-
+static RF24 trainRf(CE, CS);
 static const byte stationAddress[5] = {'s','t','a','t','n'};
 static const byte trainAddress[5] = {'t','r','a','i','n'};
 static const int GAP_SIZE = 500; // assume that 500m
@@ -14,11 +13,11 @@ static byte dataReceived = 0;
 static double dataToSend[2];
 static bool newData = false;
 
-void setupRf() {
-  servo.begin();
-  servo.setDataRate(RF24_250KBPS);
-  servo.openReadingPipe(1, stationAddress);
-  servo.openWritingPipe(trainAddress);
+static void setupRf() {
+  trainRf.begin();
+  trainRf.setDataRate(RF24_250KBPS);
+  trainRf.openReadingPipe(1, stationAddress);
+  trainRf.openWritingPipe(trainAddress);
 }
 
 void setup_train() {
@@ -56,10 +55,10 @@ double calculateSpeed() {
 
 void sendInfoToStation()
 {
-  stationRf.stopListening();
+  trainRf.stopListening();
   bool rslt;
-  rslt = stationRf.write(&dataToSend, sizeof(dataToSend));
-  stationRf.startListening();
+  rslt = trainRf.write(&dataToSend, sizeof(dataToSend));
+  trainRf.startListening();
 
   if (rslt)
   {
@@ -72,16 +71,16 @@ void sendInfoToStation()
   Serial.println();
 }
 
-void getData()
+static void getData()
 {
-  if (stationRf.available())
+  if (trainRf.available())
   {
-    stationRf.read(&dataReceived, sizeof(dataReceived));
+    trainRf.read(&dataReceived, sizeof(dataReceived));
     newData = true;
   }
 }
 
-void handleReceivedData() {
+static void handleReceivedData() {
   newData = false;
   if (dataReceived) digitalWrite(LED_PIN, 1);
 }
