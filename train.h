@@ -20,7 +20,11 @@
 #define LED_PIN 3
 
 // Button
-#define EMER_BTN 4
+#define EMER_BTN 4 // emergency button
+#define RETS_BTN 5 // reset button
+
+// Speaker
+#define SPEAKER_PIN 6
 
 void setup_train();
 void loop_train();

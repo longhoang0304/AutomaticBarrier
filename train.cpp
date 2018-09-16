@@ -10,44 +10,60 @@ static const int GAP_SIZE = 500; // assume that 500m
 static const int DIST_TO_STATION = 10000; // assum that 10km
 
 static byte dataReceived = 0;
-static double dataToSend[2];
+static double dataToSend[3];
 static bool newData = false;
 
 static void setupRf() {
   trainRf.begin();
-  trainRf.setDataRate(RF24_250KBPS);
   trainRf.openReadingPipe(1, stationAddress);
   trainRf.openWritingPipe(trainAddress);
+  trainRf.startListening();
+}
+
+static void setupPins() {
+  pinMode(HALL_PIN, INPUT);
+  pinMode(LED_PIN, OUTPUT);
+  pinMode(EMER_BTN, INPUT);
+  pinMode(RETS_BTN, INPUT);
+  pinMode(SPEAKER_PIN, OUTPUT);
 }
 
 void setup_train() {
-  pinMode(HALL_PIN, INPUT);
-  pinMode(LED_PIN, OUTPUT);
+  setupPins();
   setupRf();
+  // Serial.begin(9600);
+}
+
+bool getHallSensorSignal() {
+  return digitalRead(HALL_PIN);
 }
 
 double calculateSpeed() {
   static byte count = 0;
   static int firstHitTime = 0;
   static int lastHitTime = 0;
+  int hallSignal = getHallSensorSignal();
 
-  if (digitalRead(HALL_PIN) && !count) {
+  if (hallSignal && !count) {
     count = 1;
-    firstHitTime = millis();
+    return;
   }
 
-  if (!digitalRead(HALL_PIN) && count == 1) {
+  if (!hallSignal && count == 1) {
     count = 2;
+    firstHitTime = millis() / 1000;
+    return;
   }
 
-  if (digitalRead(HALL_PIN) && count == 2) {
+  if (hallSignal && count == 2) {
     count = 3;
-    lastHitTime = millis();
+    return;
   }
 
-  if (!digitalRead(HALL_PIN) && count == 3) {
+  if (!hallSignal && count == 3) {
     count = 0;
-    double speed = abs((lastHitTime - firstHitTime) / (double)GAP_SIZE);
+    lastHitTime = millis() / 1000;
+    double speed = (double)GAP_SIZE / abs((lastHitTime - firstHitTime));
     return speed;
   }
   return -1;
@@ -60,15 +76,15 @@ void sendInfoToStation()
   rslt = trainRf.write(&dataToSend, sizeof(dataToSend));
   trainRf.startListening();
 
-  if (rslt)
-  {
-    Serial.println("Acknowledge Received");
-  }
-  else
-  {
-    Serial.println("Tx failed");
-  }
-  Serial.println();
+  // if (rslt)
+  // {
+  //   Serial.println("Acknowledge Received");
+  // }
+  // else
+  // {
+  //   Serial.println("Tx failed");
+  // }
+  // Serial.println();
 }
 
 static void getData()
@@ -80,17 +96,46 @@ static void getData()
   }
 }
 
+void alertDanger() {
+  digitalWrite(LED_PIN, HIGH);
+  digitalWrite(SPEAKER_PIN, HIGH);
+  delay(100);
+  digitalWrite(LED_PIN, LOW);
+  digitalWrite(SPEAKER_PIN, LOW);
+  delay(100);
+}
+
 static void handleReceivedData() {
-  newData = false;
-  if (dataReceived) digitalWrite(LED_PIN, 1);
+  if (dataReceived) {
+      alertDanger();
+  }
+}
+
+static bool getEmergencySignal() {
+  return digitalRead(EMER_BTN);
+}
+
+bool getResetSignal() {
+  return digitalRead(RETS_BTN);
 }
 
 void loop_train() {
   double speed = calculateSpeed();
+  if (getEmergencySignal()) {
+    dataToSend[0] = 0.0;
+    dataToSend[1] = 0.0;
+    dataToSend[2] = 1.0;
+    sendInfoToStation();
+  }
+  if (getResetSignal()) {
+    dataReceived = 0;
+    newData = false;
+  }
   if (speed > 0) {
     double t = DIST_TO_STATION / speed;
     dataToSend[0] = speed;
     dataToSend[1] = t;
+    dataToSend[2] = 0.0;
     sendInfoToStation();
     speed = -1;
   }
@@ -98,5 +143,4 @@ void loop_train() {
   if (newData) {
     handleReceivedData();
   }
-  delay(50);
 }

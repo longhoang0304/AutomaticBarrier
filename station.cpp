@@ -64,22 +64,31 @@ void setupServo()
   controlServo(0);
 }
 
+static void setupPins() {
+  pinMode(YELLOW_LED, OUTPUT);
+  pinMode(RED_LED1, OUTPUT);
+  pinMode(RED_LED2, OUTPUT);
+  pinMode(EMER_BTN, INPUT);
+  pinMode(SPEAKER_PIN, OUTPUT);
+}
+
 static void setupRf()
 {
   stationRf.begin();
-  stationRf.setDataRate(RF24_250KBPS);
   stationRf.openWritingPipe(stationAddress);
   stationRf.openReadingPipe(1, trainAddress);
   stationRf.setRetries(3, 5);
+  stationRf.startListening();
 }
 
 void setup_station()
 {
-  pinMode(EMER_BTN, INPUT);
   setupI2C();
   setupServo();
   setupRf();
   setupLCD();
+  setupPins();
+  Serial.begin(9600);
 }
 
 // ===============================================================
@@ -108,6 +117,11 @@ static void getData()
   {
     stationRf.read(&dataReceived, sizeof(dataReceived));
     newData = true;
+    if(dataReceived[0] && dataReceived[1]) {
+      Serial.println(dataReceived[0]);
+      Serial.println(dataReceived[1]);
+      Serial.println();
+    }
   }
 }
 
@@ -124,15 +138,19 @@ static void handleReceivedData()
 
 void playAlert()
 {
-  analogWrite(SPEAKER, 200);
+  digitalWrite(SPEAKER_PIN, HIGH);
+  digitalWrite(RED_LED1, LOW);
+  digitalWrite(RED_LED2, HIGH);
   delay(100);
-  analogWrite(SPEAKER, 25);
+  digitalWrite(SPEAKER_PIN, LOW);
+  digitalWrite(RED_LED1, HIGH);
+  digitalWrite(RED_LED2, LOW);
   delay(100);
 }
 
 void stopAlert()
 {
-  analogWrite(SPEAKER, 0);
+  digitalWrite(SPEAKER_PIN, LOW);
 }
 
 void printData(int sig, int second = 0)
@@ -148,7 +166,7 @@ void printData(int sig, int second = 0)
     char ld[16]={0};
     sprintf(ld,"THOI GIAN: %d", second);
     lcd.setCursor(0, 0);
-    lcd.print("   XE SAP TOI   ");
+    lcd.print("  TAU DANG TOI  ");
     lcd.setCursor(0, 1);
     lcd.print(ld);
   }
@@ -192,20 +210,25 @@ void controlSystem()
   }
 }
 
+static bool getEmergencySignal() {
+  return digitalRead(EMER_BTN);
+}
+
 void loop_station()
 {
-  if (digitalRead(EMER_BTN))
-  {
-    alertTrain();
-  }
-  getData();
-  if (newData)
-  {
-    handleReceivedData();
-  }
-  if (isTrainComming)
-  {
-    controlSystem();
-  }
-  delay(250);
+  // if (digitalRead(EMER_BTN))
+  // {
+  //   alertTrain();
+  // }
+  // getData();
+  // if (newData)
+  // {
+  //   handleReceivedData();
+  // }
+  // if (isTrainComming)
+  // {
+  //   controlSystem();
+  // }
+  // delay(250);
+  playAlert();
 }

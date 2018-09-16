@@ -14,9 +14,9 @@
 #define SCL A5
 
 // LED
-#define GREEN_LED 2
-#define YELLOW_LED 3
-#define RED_LED 4
+#define RED_LED1 2
+#define RED_LED2 3
+#define YELLOW_LED 4
 
 // Button
 #define EMER_BTN 5
@@ -25,7 +25,7 @@
 #define BAR_PIN 6
 
 // speaker
-#define SPEAKER 9
+#define SPEAKER_PIN 9
 
 // I2C Address
 #define SLAVE_ADDRESS 0x34
