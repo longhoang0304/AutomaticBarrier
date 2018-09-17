@@ -7,7 +7,7 @@ static RF24 trainRf(CE, CS);
 static const byte stationAddress[5] = {'s','t','a','t','n'};
 static const byte trainAddress[5] = {'t','r','a','i','n'};
 static const int GAP_SIZE = 500; // assume that 500m
-static const int DIST_TO_STATION = 10000; // assum that 10km
+static const int DIST_TO_STATION = 1000; // assum that 10km
 
 static byte dataReceived = 0;
 static double dataToSend[3];
@@ -31,7 +31,7 @@ static void setupPins() {
 void setup_train() {
   setupPins();
   setupRf();
-  // Serial.begin(9600);
+  Serial.begin(9600);
 }
 
 bool getHallSensorSignal() {
@@ -76,15 +76,15 @@ void sendInfoToStation()
   rslt = trainRf.write(&dataToSend, sizeof(dataToSend));
   trainRf.startListening();
 
-  // if (rslt)
-  // {
-  //   Serial.println("Acknowledge Received");
-  // }
-  // else
-  // {
-  //   Serial.println("Tx failed");
-  // }
-  // Serial.println();
+  if (rslt)
+  {
+    Serial.println("Acknowledge Received");
+  }
+  else
+  {
+    Serial.println("Tx failed");
+  }
+  Serial.println();
 }
 
 static void getData()
@@ -121,12 +121,14 @@ bool getResetSignal() {
 
 void loop_train() {
   double speed = calculateSpeed();
-  if (getEmergencySignal()) {
-    dataToSend[0] = 0.0;
-    dataToSend[1] = 0.0;
-    dataToSend[2] = 1.0;
-    sendInfoToStation();
-  }
+  // if (getEmergencySignal()) {
+  //   dataToSend[0] = 0.0;
+  //   dataToSend[1] = 0.0;
+  //   dataToSend[2] = 1.0;
+  //   sendInfoToStation();
+  // }
+  // Serial.print("EMER: ");
+  // Serial.println(getEmergencySignal());
   if (getResetSignal()) {
     dataReceived = 0;
     newData = false;
@@ -143,4 +145,5 @@ void loop_train() {
   if (newData) {
     handleReceivedData();
   }
+  delay(250);
 }

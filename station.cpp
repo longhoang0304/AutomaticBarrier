@@ -18,7 +18,7 @@ static const byte dataToSend = 1;
 static double dataReceived[2] = {0, 0};
 static bool newData = false;
 static bool isTrainComming = false;
-static int countdownTimer = -120;
+static int countdownTimer = -6;
 static int startTime = 0;
 static double speed = 0;
 
@@ -116,11 +116,11 @@ static void getData()
   if (stationRf.available())
   {
     stationRf.read(&dataReceived, sizeof(dataReceived));
-    newData = true;
     if(dataReceived[0] && dataReceived[1]) {
-      Serial.println(dataReceived[0]);
-      Serial.println(dataReceived[1]);
-      Serial.println();
+      newData = true;
+      // Serial.println(dataReceived[0]);
+      // Serial.println(dataReceived[1]);
+      // Serial.println();
     }
   }
 }
@@ -130,7 +130,7 @@ static void handleReceivedData()
   newData = false;
   isTrainComming = true;
   speed = dataReceived[0];
-  countdownTimer = dataReceived[1];
+  countdownTimer = (int)dataReceived[1];
   startTime = millis();
   // reset
   dataReceived[0] = dataReceived[1] = 0.0;
@@ -151,6 +151,9 @@ void playAlert()
 void stopAlert()
 {
   digitalWrite(SPEAKER_PIN, LOW);
+  digitalWrite(RED_LED1, LOW);
+  digitalWrite(RED_LED2, LOW);
+  digitalWrite(YELLOW_LED, LOW);
 }
 
 void printData(int sig, int second = 0)
@@ -187,27 +190,33 @@ void controlSystem()
 {
   static int t = 0;
   t += abs(millis() - startTime);
-  if (t >= 1000 * 60)
+  if (t >= (1000))
   {
     countdownTimer -= 1;
     startTime = millis();
     t = 0;
   }
-  if (countdownTimer > 0) printData(1, countdownTimer);
-  if (!countdownTimer) printData(2);
-  if (countdownTimer < -120)
+  if (countdownTimer > 0) {
+    printData(1, countdownTimer);
+    digitalWrite(YELLOW_LED, HIGH);
+    return;
+  }
+  if (!countdownTimer) {
+    printData(2);
+    digitalWrite(YELLOW_LED, LOW);
+    playAlert();
+    return;
+  }
+  if (countdownTimer < -5)
   {
     controlServo(180);
-    countdownTimer = -120;
     startTime = 0;
     isTrainComming = false;
     printData(0);
     stopAlert();
+    return;
   }
-  else
-  {
-    playAlert();
-  }
+  playAlert();
 }
 
 static bool getEmergencySignal() {
@@ -216,19 +225,18 @@ static bool getEmergencySignal() {
 
 void loop_station()
 {
-  // if (digitalRead(EMER_BTN))
-  // {
-  //   alertTrain();
-  // }
-  // getData();
-  // if (newData)
-  // {
-  //   handleReceivedData();
-  // }
-  // if (isTrainComming)
-  // {
-  //   controlSystem();
-  // }
-  // delay(250);
-  playAlert();
+  if (digitalRead(EMER_BTN))
+  {
+    alertTrain();
+  }
+  getData();
+  if (newData)
+  {
+    handleReceivedData();
+  }
+  if (isTrainComming)
+  {
+    controlSystem();
+  }
+  delay(250);
 }
