@@ -8,7 +8,7 @@
 
 Servo servo;
 RF24 stationRf(CE, CS);
-LiquidCrystal_I2C lcd(0x3F, 16, 2);
+LiquidCrystal_I2C lcd(0x3f, 16, 2);
 
 void printData(int sig, int second = 0);
 
@@ -18,9 +18,11 @@ static const byte dataToSend = 1;
 static double dataReceived[2] = {0, 0};
 static bool newData = false;
 static bool isTrainComming = false;
-static int countdownTimer = -6;
-static int startTime = 0;
+static int countdownTimer = -11;
+static unsigned long startTime = 0;
 static double speed = 0;
+static short int servoAngle = 180;
+static const byte angleGap = 180 / -10;
 
 // ===============================================================
 
@@ -30,20 +32,44 @@ void setupLCD() {
   printData(0);
 }
 
-void sendESP8266Data()
-{
-  Wire.write(dataToSend);
+byte *convertValueToByteArray(uint16_t value) {
+  if (value <= 1) value = 0;
+  uint16_t v = value;
+  const size_t len = sizeof(uint16_t);
+  byte index = 0;
+  byte * arr;
+  arr = (byte *)calloc(len, sizeof(byte));
+  while(v) {
+    arr[index] = v & 0xff;
+    v >>= 0x08;
+    index++;
+  }
+  return arr;
 }
 
-void handleESP8266Action(int numBytes)
-{
-  byte data[numBytes] = {0};
-  byte i = 0;
-  while (Wire.available())
-  {
-    data[i] = Wire.read();
-    i++;
+void copyValueToByteArray(uint16_t value, byte *data, byte &i) {
+  byte * arr = convertValueToByteArray(value);
+  byte len = sizeof(uint16_t);
+  byte j = 0;
+  while(len) {
+    data[i++] = arr[j++];
+    len--;
   }
+  free(arr);
+}
+
+void sendESP8266Data()
+{
+  const size_t len = sizeof(uint16_t) * 2;
+  byte i = 0;
+  byte data[len] = {0};
+  // copy temperatur to array
+  copyValueToByteArray((int)speed, data, i);
+  // copy humidity to array
+  copyValueToByteArray((int)((speed - (int)speed) * 1000), data, i);
+
+  speed = 0;
+  Wire.write(data, len);
 }
 
 void controlServo(int angle)
@@ -55,13 +81,12 @@ void setupI2C()
 {
   Wire.begin(SLAVE_ADDRESS);
   Wire.onRequest(sendESP8266Data);
-  Wire.onReceive(handleESP8266Action);
 }
 
 void setupServo()
 {
   servo.attach(BAR_PIN);
-  controlServo(0);
+  controlServo(180);
 }
 
 static void setupPins() {
@@ -83,12 +108,12 @@ static void setupRf()
 
 void setup_station()
 {
-  setupI2C();
   setupServo();
   setupRf();
   setupLCD();
   setupPins();
-  Serial.begin(9600);
+  setupI2C();
+  // Serial.begin(9600);
 }
 
 // ===============================================================
@@ -100,15 +125,15 @@ void alertTrain()
   rslt = stationRf.write(&dataToSend, sizeof(dataToSend));
   stationRf.startListening();
 
-  if (rslt)
-  {
-    Serial.println("Acknowledge Received");
-  }
-  else
-  {
-    Serial.println("Tx failed");
-  }
-  Serial.println();
+  // if (rslt)
+  // {
+  //   Serial.println("Acknowledge Received");
+  // }
+  // else
+  // {
+  //   Serial.println("Tx failed");
+  // }
+  // Serial.println();
 }
 
 static void getData()
@@ -134,6 +159,7 @@ static void handleReceivedData()
   startTime = millis();
   // reset
   dataReceived[0] = dataReceived[1] = 0.0;
+  lcd.clear();
 }
 
 void playAlert()
@@ -158,12 +184,13 @@ void stopAlert()
 
 void printData(int sig, int second = 0)
 {
-  lcd.clear();
+  // lcd.clear();
   if (!sig) {
     lcd.setCursor(0, 0);
     lcd.print("   THUONG  LO   ");
     lcd.setCursor(0, 1);
     lcd.print("    BINH  AN    ");
+    return;
   }
   if(sig == 1) {
     char ld[16]={0};
@@ -172,12 +199,14 @@ void printData(int sig, int second = 0)
     lcd.print("  TAU DANG TOI  ");
     lcd.setCursor(0, 1);
     lcd.print(ld);
+    return;
   }
   if (sig == 2) {
     lcd.setCursor(0, 0);
     lcd.print("    CANH BAO    ");
     lcd.setCursor(0, 1);
     lcd.print("   NGUY  HIEM   ");
+    return;
   }
 }
 
@@ -188,13 +217,19 @@ void clearScreen()
 
 void controlSystem()
 {
-  static int t = 0;
-  t += abs(millis() - startTime);
+  static unsigned long t = 0;
+  t += (unsigned long)abs(millis() - startTime);
   if (t >= (1000))
   {
     countdownTimer -= 1;
     startTime = millis();
     t = 0;
+  }
+  if (countdownTimer > 0 && countdownTimer < 11) {
+    if(t == 0) {
+      servoAngle += angleGap;
+      controlServo(servoAngle);
+    }
   }
   if (countdownTimer > 0) {
     printData(1, countdownTimer);
@@ -207,13 +242,15 @@ void controlSystem()
     playAlert();
     return;
   }
-  if (countdownTimer < -5)
+  if (countdownTimer < -10)
   {
     controlServo(180);
     startTime = 0;
     isTrainComming = false;
     printData(0);
     stopAlert();
+    controlServo(180);
+    servoAngle = 180;
     return;
   }
   playAlert();

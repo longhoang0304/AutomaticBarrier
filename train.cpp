@@ -46,18 +46,18 @@ double calculateSpeed() {
 
   if (hallSignal && !count) {
     count = 1;
-    return;
+    return -1;
   }
 
   if (!hallSignal && count == 1) {
     count = 2;
     firstHitTime = millis() / 1000;
-    return;
+    return -1;
   }
 
   if (hallSignal && count == 2) {
     count = 3;
-    return;
+    return -1;
   }
 
   if (!hallSignal && count == 3) {
