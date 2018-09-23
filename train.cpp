@@ -6,8 +6,8 @@
 static RF24 trainRf(CE, CS);
 static const byte stationAddress[5] = {'s','t','a','t','n'};
 static const byte trainAddress[5] = {'t','r','a','i','n'};
-static const int GAP_SIZE = 500; // assume that 500m
-static const int DIST_TO_STATION = 1000; // assum that 10km
+static const int GAP_SIZE = 0.2; // assume that 20cm
+static const int DIST_TO_STATION = 2; // assume 2m
 
 static byte dataReceived = 0;
 static double dataToSend[3];
@@ -107,7 +107,7 @@ void alertDanger() {
 
 static void handleReceivedData() {
   if (dataReceived) {
-      alertDanger();
+    alertDanger();
   }
 }
 
@@ -121,15 +121,14 @@ bool getResetSignal() {
 
 void loop_train() {
   double speed = calculateSpeed();
-  // if (getEmergencySignal()) {
-  //   dataToSend[0] = 0.0;
-  //   dataToSend[1] = 0.0;
-  //   dataToSend[2] = 1.0;
-  //   sendInfoToStation();
-  // }
-  // Serial.print("EMER: ");
-  // Serial.println(getEmergencySignal());
-  if (getResetSignal()) {
+  // alertDanger();
+  if (!getEmergencySignal()) {
+    dataToSend[0] = 0.0;
+    dataToSend[1] = 0.0;
+    dataToSend[2] = 1.0;
+    sendInfoToStation();
+  }
+  if (!getResetSignal()) {
     dataReceived = 0;
     newData = false;
   }
@@ -145,5 +144,4 @@ void loop_train() {
   if (newData) {
     handleReceivedData();
   }
-  delay(250);
 }

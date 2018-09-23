@@ -6,6 +6,9 @@
 #include <LiquidCrystal_I2C.h>
 #include <station.h>
 
+#define DEFAULT_ANGLE 90
+#define DEFAULT_DANGER_TIME 5
+
 Servo servo;
 RF24 stationRf(CE, CS);
 LiquidCrystal_I2C lcd(0x3f, 16, 2);
@@ -21,8 +24,8 @@ static bool isTrainComming = false;
 static int countdownTimer = -11;
 static unsigned long startTime = 0;
 static double speed = 0;
-static short int servoAngle = 180;
-static const byte angleGap = 180 / -10;
+static short int servoAngle = DEFAULT_ANGLE;
+static short int angleGap = DEFAULT_ANGLE / -5;
 
 // ===============================================================
 
@@ -86,7 +89,7 @@ void setupI2C()
 void setupServo()
 {
   servo.attach(BAR_PIN);
-  controlServo(180);
+  controlServo(DEFAULT_ANGLE);
 }
 
 static void setupPins() {
@@ -113,7 +116,7 @@ void setup_station()
   setupLCD();
   setupPins();
   setupI2C();
-  // Serial.begin(9600);
+  Serial.begin(9600);
 }
 
 // ===============================================================
@@ -156,6 +159,12 @@ static void handleReceivedData()
   isTrainComming = true;
   speed = dataReceived[0];
   countdownTimer = (int)dataReceived[1];
+  if (countdownTimer < DEFAULT_DANGER_TIME) {
+    angleGap = -1 * (DEFAULT_ANGLE / countdownTimer);
+  } else {
+    angleGap = -1 * (DEFAULT_ANGLE / DEFAULT_DANGER_TIME);
+  }
+  
   startTime = millis();
   // reset
   dataReceived[0] = dataReceived[1] = 0.0;
@@ -225,13 +234,15 @@ void controlSystem()
     startTime = millis();
     t = 0;
   }
-  if (countdownTimer > 0 && countdownTimer < 11) {
+  if (
+    countdownTimer >= DEFAULT_DANGER_TIME && countdownTimer <= DEFAULT_DANGER_TIME + 5
+  ) {
     if(t == 0) {
       servoAngle += angleGap;
       controlServo(servoAngle);
     }
   }
-  if (countdownTimer > 0) {
+  if (countdownTimer >= DEFAULT_DANGER_TIME) {
     printData(1, countdownTimer);
     digitalWrite(YELLOW_LED, HIGH);
     return;
@@ -242,15 +253,14 @@ void controlSystem()
     playAlert();
     return;
   }
-  if (countdownTimer < -10)
+  if (countdownTimer < -3)
   {
-    controlServo(180);
     startTime = 0;
     isTrainComming = false;
     printData(0);
     stopAlert();
-    controlServo(180);
-    servoAngle = 180;
+    controlServo(DEFAULT_ANGLE);
+    servoAngle = DEFAULT_ANGLE;
     return;
   }
   playAlert();
@@ -265,6 +275,7 @@ void loop_station()
   if (digitalRead(EMER_BTN))
   {
     alertTrain();
+    // playAlert();
   }
   getData();
   if (newData)
@@ -275,5 +286,5 @@ void loop_station()
   {
     controlSystem();
   }
-  delay(250);
+  delay(100);
 }

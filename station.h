@@ -14,9 +14,9 @@
 #define SCL A5
 
 // LED
-#define RED_LED1 2
-#define RED_LED2 3
-#define YELLOW_LED 4
+#define YELLOW_LED 2
+#define RED_LED1 3
+#define RED_LED2 4
 
 // Button
 #define EMER_BTN 5
