@@ -6,7 +6,8 @@
 #include <LiquidCrystal_I2C.h>
 #include <station.h>
 
-#define DEFAULT_ANGLE 90
+#define DEFAULT_ANGLE 35
+#define MAX_ANGLE 125
 #define DEFAULT_DANGER_TIME 5
 
 Servo servo;
@@ -17,15 +18,15 @@ void printData(int sig, int second = 0);
 
 static const byte stationAddress[5] = {'s', 't', 'a', 't', 'n'};
 static const byte trainAddress[5] = {'t', 'r', 'a', 'i', 'n'};
-static const byte dataToSend = 1;
-static double dataReceived[2] = {0, 0};
+static const byte dataToSend[2] = {1, 0x34};
+static double dataReceived[4] = {0, 0, 0, 0};
 static bool newData = false;
 static bool isTrainComming = false;
 static int countdownTimer = -11;
 static unsigned long startTime = 0;
 static double speed = 0;
 static short int servoAngle = DEFAULT_ANGLE;
-static short int angleGap = DEFAULT_ANGLE / -5;
+static short int angleGap = DEFAULT_ANGLE / 5;
 
 // ===============================================================
 
@@ -144,10 +145,14 @@ static void getData()
   if (stationRf.available())
   {
     stationRf.read(&dataReceived, sizeof(dataReceived));
+    if ((int)dataReceived[3] != 0x34) {
+      return;
+    }
     if(dataReceived[0] && dataReceived[1]) {
       newData = true;
       // Serial.println(dataReceived[0]);
       // Serial.println(dataReceived[1]);
+      // Serial.println(dataReceived[3]);
       // Serial.println();
     }
   }
@@ -158,26 +163,30 @@ static void handleReceivedData()
   newData = false;
   isTrainComming = true;
   speed = dataReceived[0];
-  countdownTimer = (int)dataReceived[1];
+  countdownTimer = (int)dataReceived[1] + 1;
   if (countdownTimer < DEFAULT_DANGER_TIME) {
-    angleGap = -1 * (DEFAULT_ANGLE / countdownTimer);
+    angleGap = ((MAX_ANGLE - DEFAULT_ANGLE) / countdownTimer);
   } else {
-    angleGap = -1 * (DEFAULT_ANGLE / DEFAULT_DANGER_TIME);
+    angleGap = ((MAX_ANGLE - DEFAULT_ANGLE) / DEFAULT_DANGER_TIME);
   }
   
   startTime = millis();
   // reset
   dataReceived[0] = dataReceived[1] = 0.0;
+  dataReceived[2] = dataReceived[3] = 0.0;
   lcd.clear();
+}
+
+void playAlertSoundOnly()
+{
+  digitalWrite(SPEAKER_PIN, HIGH);
 }
 
 void playAlert()
 {
-  digitalWrite(SPEAKER_PIN, HIGH);
   digitalWrite(RED_LED1, LOW);
   digitalWrite(RED_LED2, HIGH);
   delay(100);
-  digitalWrite(SPEAKER_PIN, LOW);
   digitalWrite(RED_LED1, HIGH);
   digitalWrite(RED_LED2, LOW);
   delay(100);
@@ -203,7 +212,7 @@ void printData(int sig, int second = 0)
   }
   if(sig == 1) {
     char ld[16]={0};
-    sprintf(ld,"THOI GIAN: %d", second);
+    sprintf(ld,"THOI GIAN: %02d", second);
     lcd.setCursor(0, 0);
     lcd.print("  TAU DANG TOI  ");
     lcd.setCursor(0, 1);
@@ -226,31 +235,39 @@ void clearScreen()
 
 void controlSystem()
 {
-  static unsigned long t = 0;
+  bool resetTime = false;
+  static long t = 0;
+  static unsigned long passedTime = 0;
   t += (unsigned long)abs(millis() - startTime);
-  if (t >= (1000))
+  if (t >= (5000))
   {
-    countdownTimer -= 1;
+    countdownTimer -= t / 5000;
+    passedTime += t / 5000;
     startTime = millis();
-    t = 0;
+    t -= (5000 * (t / 5000));
+    if (t < 0) t = 0;
+    resetTime = true;
+  }
+  if (passedTime < 3) {
+    digitalWrite(YELLOW_LED, HIGH);
+  } else {
+    digitalWrite(YELLOW_LED, LOW);
+    playAlert();
   }
   if (
-    countdownTimer >= DEFAULT_DANGER_TIME && countdownTimer <= DEFAULT_DANGER_TIME + 5
+    countdownTimer > DEFAULT_DANGER_TIME && countdownTimer <= DEFAULT_DANGER_TIME + 5
   ) {
-    if(t == 0) {
+    if(resetTime || !t) {
       servoAngle += angleGap;
       controlServo(servoAngle);
     }
   }
-  if (countdownTimer >= DEFAULT_DANGER_TIME) {
+  if (countdownTimer > 0) {
     printData(1, countdownTimer);
-    digitalWrite(YELLOW_LED, HIGH);
     return;
   }
   if (!countdownTimer) {
     printData(2);
-    digitalWrite(YELLOW_LED, LOW);
-    playAlert();
     return;
   }
   if (countdownTimer < -3)
@@ -261,6 +278,7 @@ void controlSystem()
     stopAlert();
     controlServo(DEFAULT_ANGLE);
     servoAngle = DEFAULT_ANGLE;
+    passedTime = 0;
     return;
   }
   playAlert();
@@ -272,6 +290,10 @@ static bool getEmergencySignal() {
 
 void loop_station()
 {
+  // playAlert();
+  // Serial.println(digitalRead(EMER_BTN));
+  // Serial.println();
+  // return;
   if (digitalRead(EMER_BTN))
   {
     alertTrain();

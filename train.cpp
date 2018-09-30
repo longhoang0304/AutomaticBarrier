@@ -6,11 +6,11 @@
 static RF24 trainRf(CE, CS);
 static const byte stationAddress[5] = {'s','t','a','t','n'};
 static const byte trainAddress[5] = {'t','r','a','i','n'};
-static const int GAP_SIZE = 0.2; // assume that 20cm
-static const int DIST_TO_STATION = 2; // assume 2m
+static const int GAP_SIZE = 20; // assume that 20cm
+static const int DIST_TO_STATION = 200; // assume 200cm
 
-static byte dataReceived = 0;
-static double dataToSend[3];
+static byte dataReceived[2] = {0, 0};
+static double dataToSend[4];
 static bool newData = false;
 
 static void setupRf() {
@@ -18,6 +18,7 @@ static void setupRf() {
   trainRf.openReadingPipe(1, stationAddress);
   trainRf.openWritingPipe(trainAddress);
   trainRf.startListening();
+  dataToSend[3] = 0x34;
 }
 
 static void setupPins() {
@@ -76,15 +77,15 @@ void sendInfoToStation()
   rslt = trainRf.write(&dataToSend, sizeof(dataToSend));
   trainRf.startListening();
 
-  if (rslt)
-  {
-    Serial.println("Acknowledge Received");
-  }
-  else
-  {
-    Serial.println("Tx failed");
-  }
-  Serial.println();
+  // if (rslt)
+  // {
+  //   Serial.println("Acknowledge Received");
+  // }
+  // else
+  // {
+  //   Serial.println("Tx failed");
+  // }
+  // Serial.println();
 }
 
 static void getData()
@@ -92,6 +93,9 @@ static void getData()
   if (trainRf.available())
   {
     trainRf.read(&dataReceived, sizeof(dataReceived));
+    if ((byte)dataReceived[1] != 0x34) {
+      return;
+    }
     newData = true;
   }
 }
@@ -122,14 +126,21 @@ bool getResetSignal() {
 void loop_train() {
   double speed = calculateSpeed();
   // alertDanger();
-  if (!getEmergencySignal()) {
+  // Serial.println(getEmergencySignal());
+  // Serial.println(getResetSignal());
+  // Serial.println(digitalRead(HALL_PIN));
+  // Serial.println();
+  // delay(1000);
+  // return;
+  if (getEmergencySignal()) {
     dataToSend[0] = 0.0;
     dataToSend[1] = 0.0;
     dataToSend[2] = 1.0;
     sendInfoToStation();
   }
-  if (!getResetSignal()) {
-    dataReceived = 0;
+  if (getResetSignal()) {
+    dataReceived[0] = 0;
+    dataReceived[1] = 0;
     newData = false;
   }
   if (speed > 0) {
@@ -144,4 +155,5 @@ void loop_train() {
   if (newData) {
     handleReceivedData();
   }
+  delay(25);
 }
