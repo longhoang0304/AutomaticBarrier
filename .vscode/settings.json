@@ -17,6 +17,8 @@
     "deque": "cpp",
     "unordered_map": "cpp",
     "vector": "cpp",
-    "*.tcc": "cpp"
+    "*.tcc": "cpp",
+    "bitset": "cpp",
+    "xhash": "cpp"
   }
 }

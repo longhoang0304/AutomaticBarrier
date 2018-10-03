@@ -8,25 +8,24 @@
 
 #define DEFAULT_ANGLE 35
 #define MAX_ANGLE 125
-#define DEFAULT_DANGER_TIME 5
+#define DEFAULT_DANGER_TIME 3
+#define GAP_SIZE 40
+#define DIST_TO_STATION 150
 
 Servo servo;
-RF24 stationRf(CE, CS);
+// RF24 stationRf(CE, CS);
 LiquidCrystal_I2C lcd(0x3f, 16, 2);
 
 void printData(int sig, int second = 0);
 
-static const byte stationAddress[5] = {'s', 't', 'a', 't', 'n'};
-static const byte trainAddress[5] = {'t', 'r', 'a', 'i', 'n'};
-static const byte dataToSend[2] = {1, 0x34};
-static double dataReceived[4] = {0, 0, 0, 0};
-static bool newData = false;
 static bool isTrainComming = false;
+static bool trainAlert = false;
 static int countdownTimer = -11;
 static unsigned long startTime = 0;
 static double speed = 0;
+static double speedForEsp = 0;
 static short int servoAngle = DEFAULT_ANGLE;
-static short int angleGap = DEFAULT_ANGLE / 5;
+static short int angleGap = DEFAULT_ANGLE / DEFAULT_DANGER_TIME;
 
 // ===============================================================
 
@@ -67,12 +66,11 @@ void sendESP8266Data()
   const size_t len = sizeof(uint16_t) * 2;
   byte i = 0;
   byte data[len] = {0};
-  // copy temperatur to array
-  copyValueToByteArray((int)speed, data, i);
-  // copy humidity to array
-  copyValueToByteArray((int)((speed - (int)speed) * 1000), data, i);
+  // copy speed to array
+  copyValueToByteArray((int)speedForEsp, data, i);
+  copyValueToByteArray((int)((speedForEsp - (int)speedForEsp) * 1000), data, i);
 
-  speed = 0;
+  speedForEsp = 0;
   Wire.write(data, len);
 }
 
@@ -97,23 +95,22 @@ static void setupPins() {
   pinMode(YELLOW_LED, OUTPUT);
   pinMode(RED_LED1, OUTPUT);
   pinMode(RED_LED2, OUTPUT);
-  pinMode(EMER_BTN, INPUT);
-  pinMode(SPEAKER_PIN, OUTPUT);
-}
 
-static void setupRf()
-{
-  stationRf.begin();
-  stationRf.openWritingPipe(stationAddress);
-  stationRf.openReadingPipe(1, trainAddress);
-  stationRf.setRetries(3, 5);
-  stationRf.startListening();
+  pinMode(EMER_BTN, INPUT);
+  // pinMode(ALERT_BTN, INPUT);
+  pinMode(RESET_BTN, INPUT);
+
+  pinMode(HALL_PIN1, INPUT);
+  pinMode(HALL_PIN2, INPUT);
+  pinMode(HALL_PIN3, INPUT);
+
+  pinMode(SPEAKER_PIN, OUTPUT);
 }
 
 void setup_station()
 {
   setupServo();
-  setupRf();
+  // setupRf();
   setupLCD();
   setupPins();
   setupI2C();
@@ -122,58 +119,18 @@ void setup_station()
 
 // ===============================================================
 
-void alertTrain()
+static void handleCalculatedSpeed()
 {
-  stationRf.stopListening();
-  bool rslt;
-  rslt = stationRf.write(&dataToSend, sizeof(dataToSend));
-  stationRf.startListening();
-
-  // if (rslt)
-  // {
-  //   Serial.println("Acknowledge Received");
-  // }
-  // else
-  // {
-  //   Serial.println("Tx failed");
-  // }
-  // Serial.println();
-}
-
-static void getData()
-{
-  if (stationRf.available())
-  {
-    stationRf.read(&dataReceived, sizeof(dataReceived));
-    if ((int)dataReceived[3] != 0x34) {
-      return;
-    }
-    if(dataReceived[0] && dataReceived[1]) {
-      newData = true;
-      // Serial.println(dataReceived[0]);
-      // Serial.println(dataReceived[1]);
-      // Serial.println(dataReceived[3]);
-      // Serial.println();
-    }
-  }
-}
-
-static void handleReceivedData()
-{
-  newData = false;
   isTrainComming = true;
-  speed = dataReceived[0];
-  countdownTimer = (int)dataReceived[1] + 1;
+  countdownTimer = DIST_TO_STATION / speed;;
   if (countdownTimer < DEFAULT_DANGER_TIME) {
     angleGap = ((MAX_ANGLE - DEFAULT_ANGLE) / countdownTimer);
   } else {
     angleGap = ((MAX_ANGLE - DEFAULT_ANGLE) / DEFAULT_DANGER_TIME);
   }
-  
+
   startTime = millis();
-  // reset
-  dataReceived[0] = dataReceived[1] = 0.0;
-  dataReceived[2] = dataReceived[3] = 0.0;
+  speed = -1;
   lcd.clear();
 }
 
@@ -182,13 +139,21 @@ void playAlertSoundOnly()
   digitalWrite(SPEAKER_PIN, HIGH);
 }
 
-void playAlert()
+void alertTrain()
 {
-  digitalWrite(RED_LED1, LOW);
+  digitalWrite(SPEAKER_PIN2, HIGH);
   digitalWrite(RED_LED2, HIGH);
   delay(100);
-  digitalWrite(RED_LED1, HIGH);
   digitalWrite(RED_LED2, LOW);
+  delay(100);
+}
+
+
+void playAlert()
+{
+  digitalWrite(RED_LED1, HIGH);
+  delay(100);
+  digitalWrite(RED_LED1, LOW);
   delay(100);
 }
 
@@ -196,7 +161,6 @@ void stopAlert()
 {
   digitalWrite(SPEAKER_PIN, LOW);
   digitalWrite(RED_LED1, LOW);
-  digitalWrite(RED_LED2, LOW);
   digitalWrite(YELLOW_LED, LOW);
 }
 
@@ -248,14 +212,14 @@ void controlSystem()
     if (t < 0) t = 0;
     resetTime = true;
   }
-  if (passedTime < 3) {
+  if (passedTime < 2) {
     digitalWrite(YELLOW_LED, HIGH);
   } else {
     digitalWrite(YELLOW_LED, LOW);
     playAlert();
   }
   if (
-    countdownTimer > DEFAULT_DANGER_TIME && countdownTimer <= DEFAULT_DANGER_TIME + 5
+    countdownTimer > DEFAULT_DANGER_TIME && countdownTimer <= DEFAULT_DANGER_TIME + 3
   ) {
     if(resetTime || !t) {
       servoAngle += angleGap;
@@ -269,6 +233,10 @@ void controlSystem()
   if (!countdownTimer) {
     printData(2);
     return;
+  }
+  if (countdownTimer < 0) {
+    servoAngle += angleGap;
+    controlServo(servoAngle);
   }
   if (countdownTimer < -3)
   {
@@ -284,29 +252,88 @@ void controlSystem()
   playAlert();
 }
 
+static int getHallSensorSignal() {
+  if(digitalRead(HALL_PIN1)) return 1;
+  if(digitalRead(HALL_PIN2)) return 2;
+  if(digitalRead(HALL_PIN3)) return 3;
+  return 0;
+}
+
+static double calculateSpeed() {
+  static byte count = 0;
+  static int firstHitTime = 0;
+  static int lastHitTime = 0;
+  int hallSignal = getHallSensorSignal();
+
+  // wait for first signal
+  if (hallSignal == 1 && count == 0) {
+    count = 1;
+    return -1;
+  }
+
+  if (hallSignal == 0 && count == 1) {
+    count = 2;
+    firstHitTime = millis() / 1000;
+    return -1;
+  }
+
+  // wait for second signal
+  if (hallSignal == 2 && count == 2) {
+    count = 3;
+    return -1;
+  }
+
+  if (hallSignal == 0 && count == 3) {
+    count = 4;
+    lastHitTime = millis() / 1000;
+    double speed = (double)GAP_SIZE / abs((lastHitTime - firstHitTime));
+    return speed;
+  }
+
+  // waiting for done signal
+  if (hallSignal == 3 && count == 4) {
+    count = 5;
+    return -1;
+  }
+
+  if (hallSignal == 0 && count == 5) {
+    count = 0;
+    return -1;
+  }
+
+  return -1;
+}
+
 static bool getEmergencySignal() {
   return digitalRead(EMER_BTN);
 }
 
 void loop_station()
 {
-  // playAlert();
-  // Serial.println(digitalRead(EMER_BTN));
-  // Serial.println();
-  // return;
   if (digitalRead(EMER_BTN))
   {
-    alertTrain();
-    // playAlert();
+    trainAlert = true;
   }
-  getData();
-  if (newData)
+  // if (digitalRead(ALERT_BTN))
+  // {
+  //   trainAlert = true;
+  // }
+  if (digitalRead(RESET_BTN))
   {
-    handleReceivedData();
+    trainAlert = false;
+  }
+  speed = calculateSpeed();
+  if (speed > 0)
+  {
+    speedForEsp = speed;
+    handleCalculatedSpeed();
   }
   if (isTrainComming)
   {
     controlSystem();
   }
-  delay(100);
+  if (trainAlert) {
+    alertTrain();
+  }
+  delay(25);
 }
