@@ -180,6 +180,19 @@ void danger() {
     digitalWrite(RED_LED1, LOW);
 }
 
+void dangerTrain() {
+  digitalWrite(SPEAKER_PIN2, HIGH);
+  if (clocker < 4)
+    digitalWrite(RED_LED2, HIGH);
+  else
+    digitalWrite(RED_LED2, LOW);
+}
+
+void resetTrainDanger() {
+  digitalWrite(SPEAKER_PIN2, LOW);
+  digitalWrite(RED_LED2, LOW);
+}
+
 void handleWarningTime() {
   totalTime += millis() - timer;
   if (totalTime >= 2000) {
@@ -321,6 +334,12 @@ void controlSystem()
     case RESET_ALL_STATE:
       resetAll();
       break;
+    case TRAIN_DANGER_ALERT:
+      dangerTrain();
+      break;
+    case TRAIN_DANGER_ACCEPT:
+      resetTrainDanger();
+      break;
     default:
       break;
   }
@@ -340,7 +359,7 @@ void listenTrainAction() {
     return;
   }
   if (getResetSignal()) {
-    systemAction = TRAIN_DANGER_ALERT;
+    systemAction = TRAIN_DANGER_ACCEPT;
   }
   if (getHallSensorSignal() == 3) {
     systemAction = WAIT_SECOND_HALL_OFF;
