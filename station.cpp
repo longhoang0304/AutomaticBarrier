@@ -9,7 +9,7 @@
 #define DEFAULT_ANGLE 35
 #define MAX_ANGLE 125
 #define DEFAULT_DANGER_TIME 3
-#define GAP_SIZE 40
+#define GAP_SIZE 30
 #define DIST_TO_STATION 150
 
 Servo servo;
@@ -18,14 +18,14 @@ LiquidCrystal_I2C lcd(0x3f, 16, 2);
 
 void printData(int sig, int second = 0);
 
-static bool isTrainComming = false;
-static bool trainAlert = false;
-static int countdownTimer = -11;
-static unsigned long startTime = 0;
+static int countdownTimer = 0;
 static double speed = 0;
-static double speedForEsp = 0;
 static short int servoAngle = DEFAULT_ANGLE;
 static short int angleGap = DEFAULT_ANGLE / DEFAULT_DANGER_TIME;
+static long timer = 0;
+static long totalTime = 0;
+static long clocker = 0;
+SYSTEM_SYNC_ACTION systemAction;
 
 // ===============================================================
 
@@ -67,10 +67,10 @@ void sendESP8266Data()
   byte i = 0;
   byte data[len] = {0};
   // copy speed to array
-  copyValueToByteArray((int)speedForEsp, data, i);
-  copyValueToByteArray((int)((speedForEsp - (int)speedForEsp) * 1000), data, i);
+  copyValueToByteArray((int)speed, data, i);
+  copyValueToByteArray((int)((speed - (int)speed) * 1000), data, i);
 
-  speedForEsp = 0;
+  speed = 0;
   Wire.write(data, len);
 }
 
@@ -105,6 +105,7 @@ static void setupPins() {
   pinMode(HALL_PIN3, INPUT);
 
   pinMode(SPEAKER_PIN, OUTPUT);
+  pinMode(SPEAKER_PIN2, OUTPUT);
 }
 
 void setup_station()
@@ -114,55 +115,11 @@ void setup_station()
   setupLCD();
   setupPins();
   setupI2C();
+  systemAction = WAIT_FIRST_HALL_ON;
   Serial.begin(9600);
 }
 
 // ===============================================================
-
-static void handleCalculatedSpeed()
-{
-  isTrainComming = true;
-  countdownTimer = DIST_TO_STATION / speed;;
-  if (countdownTimer < DEFAULT_DANGER_TIME) {
-    angleGap = ((MAX_ANGLE - DEFAULT_ANGLE) / countdownTimer);
-  } else {
-    angleGap = ((MAX_ANGLE - DEFAULT_ANGLE) / DEFAULT_DANGER_TIME);
-  }
-
-  startTime = millis();
-  speed = -1;
-  lcd.clear();
-}
-
-void playAlertSoundOnly()
-{
-  digitalWrite(SPEAKER_PIN, HIGH);
-}
-
-void alertTrain()
-{
-  digitalWrite(SPEAKER_PIN2, HIGH);
-  digitalWrite(RED_LED2, HIGH);
-  delay(100);
-  digitalWrite(RED_LED2, LOW);
-  delay(100);
-}
-
-
-void playAlert()
-{
-  digitalWrite(RED_LED1, HIGH);
-  delay(100);
-  digitalWrite(RED_LED1, LOW);
-  delay(100);
-}
-
-void stopAlert()
-{
-  digitalWrite(SPEAKER_PIN, LOW);
-  digitalWrite(RED_LED1, LOW);
-  digitalWrite(YELLOW_LED, LOW);
-}
 
 void printData(int sig, int second = 0)
 {
@@ -197,59 +154,83 @@ void clearScreen()
   lcd.clear();
 }
 
-void controlSystem()
-{
-  bool resetTime = false;
-  static long t = 0;
-  static unsigned long passedTime = 0;
-  t += (unsigned long)abs(millis() - startTime);
-  if (t >= (5000))
-  {
-    countdownTimer -= t / 5000;
-    passedTime += t / 5000;
-    startTime = millis();
-    t -= (5000 * (t / 5000));
-    if (t < 0) t = 0;
-    resetTime = true;
+static void calculateSpeed(short t, byte hit) {
+  static short timePassed = 0;
+  if (!hit) timePassed = t;
+  if (hit) {
+    timePassed = t - timePassed;
+    speed = GAP_SIZE / (timePassed*1.0);
+    countdownTimer = (speed / DIST_TO_STATION) * 1000;
   }
-  if (passedTime < 2) {
+}
+
+void warning() {
+  if(clocker < 4)
     digitalWrite(YELLOW_LED, HIGH);
-  } else {
+  else
     digitalWrite(YELLOW_LED, LOW);
-    playAlert();
+  digitalWrite(SPEAKER_PIN, HIGH);
+}
+
+void danger() {
+  digitalWrite(YELLOW_LED, LOW);
+  if (clocker < 4)
+    digitalWrite(RED_LED1, HIGH);
+  else
+    digitalWrite(RED_LED1, LOW);
+}
+
+void handleWarningTime() {
+  totalTime += millis() - timer;
+  if (totalTime >= 2000) {
+    systemAction = STATION_DANGER;
+    countdownTimer -= totalTime;
+    totalTime = 0;
   }
-  if (
-    countdownTimer > DEFAULT_DANGER_TIME && countdownTimer <= DEFAULT_DANGER_TIME + 3
-  ) {
-    if(resetTime || !t) {
-      servoAngle += angleGap;
-      controlServo(servoAngle);
-    }
-  }
-  if (countdownTimer > 0) {
-    printData(1, countdownTimer);
-    return;
-  }
-  if (!countdownTimer) {
-    printData(2);
-    return;
-  }
-  if (countdownTimer < 0) {
+  timer = millis();
+}
+
+void handleDangerTime() {
+  static long localDangerTimer = millis();
+  localDangerTimer += millis() - localDangerTimer;
+  if (localDangerTimer >= 500) {
     servoAngle += angleGap;
-    controlServo(servoAngle);
+    if (servoAngle <= MAX_ANGLE)
+      controlServo(servoAngle);
+    localDangerTimer = millis();
   }
-  if (countdownTimer < -3)
-  {
-    startTime = 0;
-    isTrainComming = false;
-    printData(0);
-    stopAlert();
-    controlServo(DEFAULT_ANGLE);
-    servoAngle = DEFAULT_ANGLE;
-    passedTime = 0;
-    return;
+
+  totalTime += millis() - timer;
+  if (totalTime >= 4000) {
+    systemAction = STATION_WAIT_FOR_TRAIN;
+    countdownTimer -= totalTime;
+    totalTime = 0;
   }
-  playAlert();
+  timer = millis();
+}
+
+void handleWaitTime() {
+  totalTime += millis() - timer;
+
+  if (totalTime > countdownTimer) {
+    systemAction = WAIT_THIRD_HALL_ON;
+    countdownTimer = 0;
+    totalTime = 0;
+  }
+  timer = millis();
+}
+
+void handlePutUpBarrierTimer() {
+  static long localBarrierTimer = millis();
+  localBarrierTimer += millis() - localBarrierTimer;
+  if (localBarrierTimer >= 250) {
+    servoAngle -= angleGap;
+    if (servoAngle >= DEFAULT_ANGLE)
+      controlServo(servoAngle);
+    else
+      systemAction = RESET_ALL_STATE;
+    localBarrierTimer = millis();
+  }
 }
 
 static int getHallSensorSignal() {
@@ -259,81 +240,117 @@ static int getHallSensorSignal() {
   return 0;
 }
 
-static double calculateSpeed() {
-  static byte count = 0;
-  static int firstHitTime = 0;
-  static int lastHitTime = 0;
-  int hallSignal = getHallSensorSignal();
+void resetAll() {
+  timer = 0;
+  // speed = 0;
+  totalTime = 0;
+  countdownTimer = 0;
+  servoAngle = DEFAULT_ANGLE;
+  systemAction = WAIT_FIRST_HALL_ON;
+  angleGap = DEFAULT_ANGLE / DEFAULT_DANGER_TIME;
+  digitalWrite(RED_LED1, LOW);
+  digitalWrite(SPEAKER_PIN, LOW);
+  controlServo(servoAngle);
+  printData(0);
+}
 
-  // wait for first signal
-  if (hallSignal == 1 && count == 0) {
-    count = 1;
-    return -1;
+void controlSystem()
+{
+  switch(systemAction) {
+    // HALL SENSOR ACTION
+    case WAIT_FIRST_HALL_ON:
+      if (getHallSensorSignal() == 1) {
+        systemAction = WAIT_FIRST_HALL_OFF;
+      }
+      break;
+    case WAIT_FIRST_HALL_OFF:
+      if (getHallSensorSignal() == 0) {
+        systemAction = WAIT_SECOND_HALL_ON;
+        calculateSpeed(millis() / 1000, 0);
+      }
+      break;
+    case WAIT_SECOND_HALL_ON:
+      if (getHallSensorSignal() == 1) {
+        systemAction = WAIT_SECOND_HALL_OFF;
+      }
+      break;
+    case WAIT_SECOND_HALL_OFF:
+      if (getHallSensorSignal() == 2) {
+        systemAction = STATION_WARNING;
+        calculateSpeed(millis() / 1000, 1);
+        timer = 0;
+      }
+      break;
+    case WAIT_THIRD_HALL_ON:
+      danger();
+      if (getHallSensorSignal() == 3) {
+        systemAction = WAIT_SECOND_HALL_OFF;
+      }
+      break;
+    case WAIT_THIRD_HALL_OFF:
+      danger();
+      if (getHallSensorSignal() == 0) {
+        systemAction = STATION_PUT_BARRIER_UP;
+      }
+      break;
+    // HALL SENSOR ACTION END
+    case STATION_WARNING:
+      printData(
+        1,
+        (countdownTimer - totalTime) / 1000
+      );
+      warning();
+      handleWarningTime();
+      break;
+    case STATION_DANGER:
+      printData(
+        1,
+        (countdownTimer - totalTime) / 1000
+      );
+      danger();
+      handleDangerTime();
+      break;
+    case STATION_WAIT_FOR_TRAIN:
+      danger();
+      printData(2);
+      handleWaitTime();
+      break;
+    case STATION_PUT_BARRIER_UP:
+      handlePutUpBarrierTimer();
+      break;
+    case RESET_ALL_STATE:
+      resetAll();
+      break;
+    default:
+      break;
   }
-
-  if (hallSignal == 0 && count == 1) {
-    count = 2;
-    firstHitTime = millis() / 1000;
-    return -1;
-  }
-
-  // wait for second signal
-  if (hallSignal == 2 && count == 2) {
-    count = 3;
-    return -1;
-  }
-
-  if (hallSignal == 0 && count == 3) {
-    count = 4;
-    lastHitTime = millis() / 1000;
-    double speed = (double)GAP_SIZE / abs((lastHitTime - firstHitTime));
-    return speed;
-  }
-
-  // waiting for done signal
-  if (hallSignal == 3 && count == 4) {
-    count = 5;
-    return -1;
-  }
-
-  if (hallSignal == 0 && count == 5) {
-    count = 0;
-    return -1;
-  }
-
-  return -1;
 }
 
 static bool getEmergencySignal() {
   return digitalRead(EMER_BTN);
 }
 
+static bool getResetSignal() {
+  return digitalRead(RESET_BTN);
+}
+
+void listenTrainAction() {
+  if (getEmergencySignal()) {
+    systemAction = TRAIN_DANGER_ALERT;
+    return;
+  }
+  if (getResetSignal()) {
+    systemAction = TRAIN_DANGER_ALERT;
+  }
+  if (getHallSensorSignal() == 3) {
+    systemAction = WAIT_SECOND_HALL_OFF;
+  }
+}
+
 void loop_station()
 {
-  if (digitalRead(EMER_BTN))
-  {
-    trainAlert = true;
-  }
-  // if (digitalRead(ALERT_BTN))
-  // {
-  //   trainAlert = true;
-  // }
-  if (digitalRead(RESET_BTN))
-  {
-    trainAlert = false;
-  }
-  speed = calculateSpeed();
-  if (speed > 0)
-  {
-    speedForEsp = speed;
-    handleCalculatedSpeed();
-  }
-  if (isTrainComming)
-  {
-    controlSystem();
-  }
-  if (trainAlert) {
-    alertTrain();
-  }
+  clocker = (clocker + 1) % 8;
+  listenTrainAction();
+  controlSystem();
   delay(25);
 }
