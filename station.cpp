@@ -283,21 +283,21 @@ void controlSystem()
       }
       break;
     case WAIT_SECOND_HALL_ON:
-      if (getHallSensorSignal() == 1) {
+      if (getHallSensorSignal() == 2) {
         systemAction = WAIT_SECOND_HALL_OFF;
       }
       break;
     case WAIT_SECOND_HALL_OFF:
-      if (getHallSensorSignal() == 2) {
+      if (getHallSensorSignal() == 0) {
         systemAction = STATION_WARNING;
         calculateSpeed(millis() / 1000, 1);
-        timer = 0;
+        timer = millis();
       }
       break;
     case WAIT_THIRD_HALL_ON:
       danger();
       if (getHallSensorSignal() == 3) {
-        systemAction = WAIT_SECOND_HALL_OFF;
+        systemAction = WAIT_THIRD_HALL_OFF;
       }
       break;
     case WAIT_THIRD_HALL_OFF:
@@ -329,6 +329,7 @@ void controlSystem()
       handleWaitTime();
       break;
     case STATION_PUT_BARRIER_UP:
+      danger();
       handlePutUpBarrierTimer();
       break;
     case RESET_ALL_STATE:
@@ -362,7 +363,7 @@ void listenTrainAction() {
     systemAction = TRAIN_DANGER_ACCEPT;
   }
   if (getHallSensorSignal() == 3) {
-    systemAction = WAIT_SECOND_HALL_OFF;
+    systemAction = WAIT_THIRD_HALL_OFF;
   }
 }
 
